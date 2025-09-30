@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>100-Item PM & SDLC Quiz (From Your Files) — v2</title>
+  <style>
+    :root { --bg:#f7f7fb; --card:#fff; --text:#111827; --muted:#6b7280; --primary:#2563eb; --border:#e5e7eb; --chip:#eef2ff; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--text);}
+    .container{max-width:1024px;margin:40px auto;padding:0 16px;}
+    .header{background:linear-gradient(180deg,#eff6ff,#fff);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px;}
+    .header h1{margin:0 0 6px;font-size:28px;letter-spacing:-.02em}
+    .header p{margin:0;color:var(--muted);font-size:14px}
+    .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px}
+    .q-title{font-weight:700;margin-bottom:6px}
+    .q-help{color:var(--muted);font-size:13px;margin-bottom:8px}
+    .choices{margin-top:8px}
+    .choice{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px}
+    .choice:hover{background:#fafbff;border-color:#c7d2fe}
+    .choice-label{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:var(--chip);color:#4338ca;font-weight:700}
+    .text-input,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:10px;outline:none}
+    .text-input:focus,select:focus{border-color:#93c5fd;box-shadow:0 0 0 3px #dbeafe}
+    .subtitle{color:var(--muted);font-size:13px;margin:6px 0 12px}
+    .pair-row{display:grid;grid-template-columns:1fr 260px;gap:10px;align-items:center;margin:6px 0}
+    .btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+    button{border:1px solid var(--border);background:#fff;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+    button.primary{background:var(--primary);border-color:var(--primary);color:#fff}
+    button.ghost{background:transparent}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    .score{display:flex;gap:10px;align-items:center;padding:12px 14px;border:1px solid var(--border);background:#fff;border-radius:12px;margin-bottom:14px}
+    .badge{font-weight:800;padding:6px 10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;min-width:70px;text-align:center}
+    .review.correct{border-color:#bbf7d0;background:#f0fdf4}
+    .review.incorrect{border-color:#fecaca;background:#fff1f2}
+    .muted{color:#6b7280}
+    .footnote{color:var(--muted);font-size:12px;text-align:center;margin-top:20px}
+    .hidden{display:none}
+    .src{font-size:12px;color:#64748b;margin-top:6px}
+
+    /* Floating HUD for progress and score */
+    .hud{
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.08);
+      z-index: 50;
+      font-size: 14px;
+      min-width: 210px;
+    }
+    .hud .row{display:flex;justify-content:space-between;align-items:center;margin:4px 0}
+    .hud .val{font-weight:800}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>100-Item PM & SDLC Quiz (From Your Files) — v2</h1>
+      <p>Items come from your uploaded files: Project-Mgt_lec-1.pptx, chapter3theprojectmanagementprocess.ppt, Chapter-2.pptx, softwaredevelopmentprocess.pptx, and SOFTWARE-PROJECT-MANAGEMENT-POINTERS-2.pdf.</p>
+    </div>
+
+    <div id="scoreBox" class="score hidden">
+      <div class="badge" id="scoreBadge">0/100</div>
+      <div><strong>Final Score:</strong> <span id="scoreText">0 of 100</span><div class="muted">Scroll to see per-item feedback. Green = correct, Red = incorrect.</div></div>
+    </div>
+
+    <div id="quiz"></div>
+
+    <div class="btn-row">
+      <button id="submitBtn" class="primary">Submit</button>
+      <button id="retryBtn" class="ghost hidden">Retry & Shuffle</button>
+      <button id="saveBtn" class="ghost hidden">Save Review as Word</button>
+    </div>
+
+    <div id="reviewContainer" class="hidden"></div>
+    <div class="footnote">Offline, single file. MCQ choices shuffle while A–D labels stay fixed. Matching and Enumeration award 1 point only when fully correct.</div>
+  </div>
+
+  <!-- Floating HUD -->
+  <div class="hud" id="hud">
+    <div class="row"><div>Answered</div><div class="val"><span id="answeredNum">0</span>/<span id="totalNum">0</span></div></div>
+    <div class="row"><div>Score</div><div class="val" id="hudScore">—</div></div>
+  </div>
+
+<script>
+// ===== Utils =====
+function shuffle(arr){const a=arr.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function letterAt(i){return String.fromCharCode("A".charCodeAt(0)+i);}
+function norm(s){return (s||"").toString().trim().toLowerCase().replace(/[.\-_,;:!?()]/g,"").replace(/\s+/g," ");}
+function escapeHTML(s){return (s+"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");}
+
+// ===== Data (same 100 items as previous version) =====
+const SRC = {
+  LEC1: "Project-Mgt_lec-1.pptx",
+  CH3: "chapter3theprojectmanagementprocess.ppt",
+  CH2: "Chapter-2.pptx",
+  SDP: "softwaredevelopmentprocess.pptx",
+  PDF: "SOFTWARE-PROJECT-MANAGEMENT-POINTERS-2.pdf"
+};
+
+const TF=[
+["A project is a temporary endeavor undertaken to create a unique product, service, or result.",true,SRC.LEC1],
+["Projects are ongoing operations with no defined end date.",false,SRC.LEC1],
+["The triple constraint includes scope, time, and cost.",true,SRC.LEC1],
+["Stakeholders are only the project team members.",false,SRC.LEC1],
+["A program is a group of related projects managed together.",true,SRC.LEC1],
+["Portfolio management treats projects and programs as investments.",true,SRC.LEC1],
+["Monitoring and controlling occurs throughout the project life cycle.",true,SRC.CH3],
+["The project charter formally authorizes a project.",true,SRC.CH3],
+["Planning produces a WBS and a fully resourced schedule.",true,SRC.CH3],
+["Executing usually consumes the least time and resources.",false,SRC.CH3],
+["Closing can include creating a lessons learned report.",true,SRC.CH3],
+["Agile values working software over comprehensive documentation.",true,SRC.CH2],
+["In Agile, responding to change is valued over following a plan.",true,SRC.CH2],
+["Scrum sprints are typically 2–4 weeks.",true,SRC.SDP],
+["During a sprint, the product backlog can be changed at any time by anyone.",false,SRC.SDP],
+["The ScrumMaster owns the product backlog.",false,SRC.SDP],
+["The product owner prioritizes the backlog by business value.",true,SRC.SDP],
+["A burndown chart shows remaining work over time in a sprint.",true,SRC.SDP],
+["A Scrum team is typically composed of 5–9 people.",true,SRC.SDP],
+["The WBS decomposes project deliverables into work packages.",true,SRC.LEC1],
+["Gantt charts show tasks over time on a calendar-like timescale.",true,SRC.LEC1],
+["A network diagram depicts dependencies among activities.",true,SRC.LEC1],
+["The critical path is the shortest path through the network.",false,SRC.LEC1],
+["Risk management is unrelated to project success.",false,SRC.PDF],
+["Integration management coordinates project processes to work together.",true,SRC.PDF],
+["Scope, time, and cost goals are always independent with no tradeoffs.",false,SRC.LEC1],
+["Project success can include meeting business objectives, not only the iron triangle.",true,SRC.LEC1],
+["Functional organizations give most authority to project managers.",false,SRC.LEC1],
+["Matrix organizations share authority between functional managers and project managers.",true,SRC.LEC1],
+["Management reviews at phase exits help evaluate progress and fit.",true,SRC.LEC1]
+];
+const MCQ=[
+["Which set represents the triple constraint?",["Scope, Time, Cost","Quality, Risk, Procurement","Integration, HR, Communications","Risk, Procurement, Stakeholder"],0,SRC.LEC1],
+["Who prioritizes the product backlog?",["Product Owner","ScrumMaster","Project Sponsor","Developers"],0,SRC.SDP],
+["Which artifact lists features prioritized by business value?",["Product backlog","Sprint backlog","Burndown chart","Network diagram"],0,SRC.CH3],
+["Which meeting is a short daily coordination?",["Daily Scrum","Sprint Review","Sprint Planning","Retrospective"],0,SRC.CH3],
+["Which chart shows remaining work each day of a sprint?",["Burndown chart","Velocity chart","Pareto chart","Histogram"],0,SRC.SDP],
+["Typical Scrum sprint duration:",["2–4 weeks","1 day","8–12 weeks","6 months"],0,SRC.SDP],
+["Typical Scrum team size:",["5–9 people","2–3 people","10–15 people","15–20 people"],0,SRC.SDP],
+["Document that formally authorizes a project:",["Project charter","Business case","Project plan","WBS dictionary"],0,SRC.CH3],
+["A deliverable-oriented hierarchical decomposition:",["Work Breakdown Structure","Critical Path","Network Diagram","Risk Register"],0,SRC.LEC1],
+["Diagram emphasizing dependencies among activities:",["Network diagram","Gantt chart","Pareto chart","Ishikawa diagram"],0,SRC.LEC1],
+["Longest duration path through the network:",["Critical path","Fast track","Slack path","Float line"],0,SRC.LEC1],
+["A group of related projects managed together:",["Program","Portfolio","Operation","Phase"],0,SRC.LEC1],
+["Enterprise-level selection and analysis of projects/programs:",["Portfolio management","Program management","Operations management","Quality management"],0,SRC.LEC1],
+["In a functional organization, power primarily resides with:",["Functional managers","Project managers","ScrumMasters","Sponsors"],0,SRC.LEC1],
+["Phase exit evaluation point:",["Kill point","Work package","Milestone","Handover"],0,SRC.LEC1],
+["A milestone best describes:",["A significant point or event","A work package","A resource","A risk response"],0,SRC.LEC1],
+["Which is a key planning output in the case study slides?",["WBS and schedule","Procurement contract","Operational manual","Decommission plan"],0,SRC.CH3],
+["In Scrum, who removes impediments and facilitates the process?",["ScrumMaster","Product Owner","Sponsor","User"],0,SRC.CH3],
+["Which meeting demonstrates a potentially shippable increment?",["Sprint Review","Daily Scrum","Backlog refinement","Retrospective"],0,SRC.CH3],
+["Which meeting focuses on process improvement?",["Sprint Retrospective","Sprint Planning","Daily Scrum","Review"],0,SRC.CH3],
+["Agile values emphasize:",["Customer collaboration over contract negotiation","Following a plan over responding to change","Processes and tools over individuals","Comprehensive docs over working software"],0,SRC.CH2],
+["Which term refers to cost/schedule measurement using PV, EV, AC (introduced as EVM)?",["Earned Value Management","Effective Value Model","Estimated Variance Method","Enterprise Value Metric"],0,SRC.LEC1],
+["Which tool is often considered a 'super tool' widely used?",["Gantt chart","Cause-and-effect diagram","Affinity diagram","Pugh matrix"],0,SRC.LEC1],
+["Which is a success factor frequently cited for IT projects?",["User involvement","Ignoring change control","No executive support","Undefined objectives"],0,SRC.LEC1],
+["What does a business case primarily justify?",["Why the project should be done","The team composition","The test cases","The coding standard"],0,SRC.CH3],
+["Which constraint is NOT part of the triple constraint?",["Quality","Scope","Time","Cost"],0,SRC.LEC1],
+["Which knowledge area integrates the others for coherence?",["Project Integration Management","Project Quality Management","Project Risk Management","Project Procurement Management"],0,SRC.PDF],
+["Which artifact selects items for a sprint?",["Sprint backlog","Product backlog","Release plan","Issue log"],0,SRC.CH3],
+["Which role represents the voice of the customer?",["Product Owner","ScrumMaster","Project Manager","Sponsor"],0,SRC.SDP],
+["Which chart is time-scaled and task-focused?",["Gantt chart","Network diagram","Scatter plot","Run chart"],0,SRC.LEC1],
+["Which best describes progressive elaboration?",["Developing in steps with continuous detail increase","Finishing all design up front","Randomly changing scope","Compressing schedule"],0,SRC.LEC1],
+["Which describes fast tracking?",["Parallelizing activities to reduce duration","Adding resources to shorten tasks","Outsourcing activities","Eliminating testing"],0,SRC.LEC1],
+["Which term is most associated with scope verification?",["Acceptance of deliverables","Calculating CPI","Vendor selection","Monte Carlo"],0,SRC.LEC1],
+["Which communication artifact is common in Scrum execution?",["Information radiator (task board/burndown)","Stakeholder register","Contract change order","Ishikawa diagram"],0,SRC.SDP],
+["Who provides funding and champions the project?",["Project Sponsor","ScrumMaster","Customer","Procurement officer"],0,SRC.LEC1],
+["Which structure shares authority between functional and project managers?",["Matrix","Projectized","Functional","Composite"],0,SRC.LEC1],
+["Primary purpose of lessons learned:",["Document knowledge for future projects","Update WBS","Negotiate contracts","Define scope"],0,SRC.CH3],
+["Which agile practice emphasizes small, testable increments?",["Iterative and incremental development","Big design up front","Waterfall gating only","Critical chain"],0,SRC.SDP],
+["What is a WBS dictionary?",["Details about WBS elements","A list of risks","A schedule baseline","A cost baseline"],0,SRC.LEC1],
+["Which best helps visualize dependencies before creating a schedule?",["Network diagram","Pareto chart","Control chart","Histogram"],0,SRC.LEC1],
+["Which artifact helps track daily remaining work against time?",["Sprint burndown","Risk matrix","Gantt baseline","Cost histogram"],0,SRC.SDP]
+];
+const ID=[
+["Define 'stakeholders' in a project (short phrase).",["people involved in or affected by project activities"],SRC.LEC1],
+["Name the document that authorizes the project.",["project charter","charter"],SRC.CH3],
+["Name the hierarchical decomposition of project work.",["work breakdown structure","wbs"],SRC.LEC1],
+["Give the term for the longest path through a network.",["critical path"],SRC.LEC1],
+["Which artifact lists items selected for the current sprint?",["sprint backlog"],SRC.CH3],
+["What chart shows remaining work in a sprint?",["burndown chart","burn down chart"],SRC.SDP],
+["Who prioritizes by business value?",["product owner"],SRC.SDP],
+["Daily 15-minute team meeting is called?",["daily scrum","scrum"],SRC.CH3],
+["Short time-boxed iteration in Scrum?",["sprint"],SRC.SDP],
+["Project time-phased plan of tasks display?",["gantt chart"],SRC.LEC1],
+["Document capturing what and why to justify a project?",["business case"],SRC.CH3],
+["Boundary of what is and is not included in the project?",["scope"],SRC.LEC1],
+["Planned finish date symbol in schedule?",["milestone"],SRC.LEC1],
+["Risk response planning register name?",["risk register"],SRC.LEC1],
+["Formal acceptance at phase end term?",["phase exit","kill point"],SRC.LEC1],
+["People who sponsor and provide financial support?",["project sponsor","sponsor"],SRC.LEC1],
+["Organizational form sharing authority?",["matrix organization","matrix"],SRC.LEC1],
+["Practice of learning after closing?",["lessons learned"],SRC.CH3],
+["Chart of tasks vs time baseline?",["schedule baseline","baseline schedule"],SRC.LEC1],
+["Decomposition endpoint below work package?",["activity"],SRC.LEC1]
+];
+const ACR=[
+["Expand PMBOK.",["project management body of knowledge"],SRC.LEC1],
+["Expand PMI.",["project management institute"],SRC.LEC1],
+["Expand EVM.",["earned value management"],SRC.LEC1],
+["Expand CPM.",["critical path method"],SRC.LEC1],
+["Expand WBS.",["work breakdown structure"],SRC.LEC1]
+];
+const ENUM=[
+["List the five project management process groups.",["initiating","planning","executing","monitoring and controlling","closing","monitoring & controlling"],5,SRC.CH3],
+["List the four Agile Manifesto value headers.",["individuals and interactions","working software","customer collaboration","responding to change"],4,SRC.CH2],
+["List three common project constraints collectively known as the triple constraint.",["scope","time","cost"],3,SRC.LEC1]
+];
+const MATCH=[
+["Match role to responsibility (Product Owner).",[{"key":"Product Owner","answer":"Prioritizes product backlog by business value"}],
+ ["Prioritizes product backlog by business value","Facilitates Scrum and removes impediments","Provides funding and champions project","Creates network diagram"],SRC.SDP],
+["Match role to responsibility (ScrumMaster).",[{"key":"ScrumMaster","answer":"Facilitates Scrum and removes impediments"}],
+ ["Facilitates Scrum and removes impediments","Prioritizes product backlog","Owns budget approvals","Defines portfolio strategy"],SRC.CH3]
+];
+
+let BASE_QUESTIONS=[];
+TF.forEach(([text, ans, src], idx)=>{ BASE_QUESTIONS.push({ id:`tf${idx+1}`, type:"truefalse", text, answer: !!ans, points:1, source:src }); });
+MCQ.forEach(([text, choices, correctIndex, src], idx)=>{ BASE_QUESTIONS.push({ id:`mc${idx+1}`, type:"mcq", text, choices, correctIndex, points:1, source:src }); });
+ID.forEach(([text, answers, src], idx)=>{ BASE_QUESTIONS.push({ id:`id${idx+1}`, type:"identification", text, answers, points:1, source:src }); });
+ACR.forEach(([text, answers, src], idx)=>{ BASE_QUESTIONS.push({ id:`acr${idx+1}`, type:"acronym", text, answers, points:1, source:src }); });
+ENUM.forEach(([text, answers, requiredCount, src], idx)=>{ BASE_QUESTIONS.push({ id:`enum${idx+1}`, type:"enumeration", text, answers, requiredCount, points:1, source:src }); });
+MATCH.forEach(([text, left, rightOptions, src], idx)=>{ BASE_QUESTIONS.push({ id:`match${idx+1}`, type:"matching", text, left, rightOptions, points:1, source:src }); });
+if (BASE_QUESTIONS.length !== 100){
+  while(BASE_QUESTIONS.length < 100){
+    BASE_QUESTIONS.push({ id:`pad${BASE_QUESTIONS.length+1}`, type:"truefalse",
+      text:"The project sponsor provides direction and funding.", answer:true, points:1, source:SRC.LEC1 });
+  }
+  if (BASE_QUESTIONS.length > 100) BASE_QUESTIONS = BASE_QUESTIONS.slice(0,100);
+}
+
+// ===== State & Rendering =====
+function buildState(){
+  const qs = shuffle(BASE_QUESTIONS).map(q=>{
+    if(q.type==="mcq"){
+      const idxs = Array.from({length:q.choices.length}, (_,i)=>i);
+      const shuffled = shuffle(idxs).map(i=>({text:q.choices[i], origIndex:i}));
+      return {...q, _choiceMap: shuffled};
+    }
+    if(q.type==="matching"){
+      return {...q, _rightShuffled: shuffle(q.rightOptions)};
+    }
+    return {...q};
+  });
+  return qs;
+}
+let QUIZ_STATE = buildState();
+
+function typeHelp(q){
+  switch(q.type){
+    case "truefalse": return "True or False";
+    case "mcq": return "Multiple Choice (choices shuffle; A–D fixed)";
+    case "identification": return "Identification";
+    case "matching": return "Matching Type (single pair)";
+    case "enumeration": return "Enumeration (all required items needed)";
+    case "acronym": return "Acronym Expansion";
+    default: return "";
+  }
+}
+
+function renderQuiz(){
+  const root = document.getElementById("quiz");
+  root.innerHTML = "";
+  QUIZ_STATE.forEach((q,i)=>{
+    const card = document.createElement("div"); card.className="card"; card.id=`q-${q.id}`;
+    const title = document.createElement("div"); title.className="q-title"; title.textContent = `${i+1}. ${q.text}`;
+    const help = document.createElement("div"); help.className="q-help"; help.textContent = typeHelp(q);
+    const src  = document.createElement("div"); src.className="src"; src.textContent = `Source: ${q.source}`;
+
+    card.appendChild(title); card.appendChild(help);
+
+    if(q.type==="truefalse"){
+      const wrap=document.createElement("div"); wrap.className="choices";
+      ["True","False"].forEach((lbl,ix)=>{
+        const row=document.createElement("label"); row.className="choice";
+        const badge=document.createElement("div"); badge.className="choice-label"; badge.textContent=letterAt(ix);
+        const input=document.createElement("input"); input.type="radio"; input.name=q.id; input.value=lbl.toLowerCase(); input.style.marginTop="4px";
+        const span=document.createElement("div"); span.textContent=lbl;
+        row.appendChild(badge); row.appendChild(input); row.appendChild(span); wrap.appendChild(row);
+      });
+      card.appendChild(wrap);
+    }
+
+    if(q.type==="mcq"){
+      const wrap=document.createElement("div"); wrap.className="choices";
+      q._choiceMap.forEach((c,ix)=>{
+        const row=document.createElement("label"); row.className="choice";
+        const badge=document.createElement("div"); badge.className="choice-label"; badge.textContent=letterAt(ix);
+        const input=document.createElement("input"); input.type="radio"; input.name=q.id; input.value=ix; input.style.marginTop="4px";
+        const span=document.createElement("div"); span.textContent=c.text;
+        row.appendChild(badge); row.appendChild(input); row.appendChild(span); wrap.appendChild(row);
+      });
+      card.appendChild(wrap);
+    }
+
+    if(q.type==="identification" || q.type==="acronym"){
+      const input=document.createElement("input"); input.className="text-input"; input.type="text"; input.placeholder="Type your answer"; input.dataset.qid=q.id;
+      card.appendChild(input);
+    }
+
+    if(q.type==="matching"){
+      const sub=document.createElement("div"); sub.className="subtitle"; sub.textContent="Select the correct match.";
+      card.appendChild(sub);
+      q.left.forEach(pair=>{
+        const row=document.createElement("div"); row.className="pair-row";
+        const left=document.createElement("div"); left.textContent=pair.key;
+        const sel=document.createElement("select"); sel.dataset.qid=q.id; sel.dataset.leftKey=pair.key;
+        const def=document.createElement("option"); def.value=""; def.textContent="— Select —"; sel.appendChild(def);
+        q._rightShuffled.forEach(opt=>{ const o=document.createElement("option"); o.value=opt; o.textContent=opt; sel.appendChild(o); });
+        row.appendChild(left); row.appendChild(sel); card.appendChild(row);
+      });
+    }
+
+    if(q.type==="enumeration"){
+      const sub=document.createElement("div"); sub.className="subtitle"; sub.textContent="Provide all required items. Order does not matter.";
+      card.appendChild(sub);
+      const input=document.createElement("input"); input.className="text-input"; input.type="text"; input.placeholder="Enter items separated by commas"; input.dataset.qid=q.id;
+      card.appendChild(input);
+    }
+
+    card.appendChild(src);
+    root.appendChild(card);
+  });
+
+  // HUD total
+  document.getElementById("totalNum").textContent = QUIZ_STATE.length;
+  updateProgress();
+}
+
+// ===== Scoring & Review =====
+function renderReviewBlock(titleText, html, ok){
+  const wrap=document.createElement("div"); wrap.className=`card review ${ok?"correct":"incorrect"}`;
+  const t=document.createElement("div"); t.className="q-title"; t.textContent=titleText; wrap.appendChild(t);
+  const d=document.createElement("div"); d.innerHTML=html; wrap.appendChild(d);
+  return wrap;
+}
+
+function collectAndScore(){
+  let score=0, total=QUIZ_STATE.length; const review=[];
+
+  QUIZ_STATE.forEach((q,idx)=>{
+    if(q.type==="truefalse"){
+      const sel=document.querySelector(`input[name="${q.id}"]:checked`);
+      const v = sel? sel.value : null;
+      const ok = (v==="true")===q.answer;
+      if(ok) score += 1;
+      review.push(renderReviewBlock(`${idx+1}. ${q.text}`,
+        `<div><strong>Your answer:</strong> ${escapeHTML(v||"(no answer)")}</div>
+         <div><strong>Correct:</strong> ${q.answer?"true":"false"}</div>
+         <div class="src">Source: ${escapeHTML(q.source)}</div>`, ok));
+    }
+
+    if(q.type==="mcq"){
+      const sel=document.querySelector(`input[name="${q.id}"]:checked`);
+      const userIx = sel? parseInt(sel.value,10): NaN;
+      const correctIxInMap = q._choiceMap.findIndex(x=>x.origIndex===q.correctIndex);
+      const ok = sel && userIx===correctIxInMap;
+      if(ok) score += 1;
+      review.push(renderReviewBlock(`${idx+1}. ${q.text}`,
+        `<div><strong>Your answer:</strong> ${escapeHTML(sel? q._choiceMap[userIx].text: "(no answer)")}</div>
+         <div><strong>Correct:</strong> ${escapeHTML(q._choiceMap[correctIxInMap].text)}</div>
+         <div class="src">Source: ${escapeHTML(q.source)}</div>`, !!ok));
+    }
+
+    if(q.type==="identification" || q.type==="acronym"){
+      const input=document.querySelector(`input[data-qid="${q.id}"]`);
+      const val=input?input.value:"";
+      const ok=(q.answers||[]).map(norm).includes(norm(val));
+      if(ok) score += 1;
+      review.push(renderReviewBlock(`${idx+1}. ${q.text}`,
+        `<div><strong>Your answer:</strong> ${escapeHTML(val||"(no answer)")}</div>
+         <div><strong>Accepted:</strong> ${escapeHTML((q.answers||[]).join(" / "))}</div>
+         <div class="src">Source: ${escapeHTML(q.source)}</div>`, ok));
+    }
+
+    if(q.type==="matching"){
+      const pair=q.left[0];
+      const sel = document.querySelector(`select[data-qid="${q.id}"][data-left-key="${pair.key}"]`);
+      const val = sel? sel.value: "";
+      const ok = norm(val)===norm(pair.answer);
+      if(ok) score += 1;
+      review.push(renderReviewBlock(`${idx+1}. ${q.text}`,
+        `<div><strong>Pair:</strong> ${escapeHTML(pair.key)} → ${escapeHTML(val||"(no selection)")}</div>
+         <div><strong>Correct:</strong> ${escapeHTML(pair.answer)}</div>
+         <div class="src">Source: ${escapeHTML(q.source)}</div>`, ok));
+    }
+
+    if(q.type==="enumeration"){
+      const input=document.querySelector(`input[data-qid="${q.id}"]`);
+      const raw = input? input.value : "";
+      const provided = Array.from(new Set(raw.split(",").map(x=>norm(x)).filter(Boolean)));
+      const needed = (q.answers||[]).map(norm);
+      const req = q.requiredCount || needed.length;
+      let hits = 0; const neededSet = new Set(needed);
+      provided.forEach(v=>{ if(neededSet.has(v)) hits++; });
+      const ok = hits >= req;
+      if(ok) score += 1;
+      review.push(renderReviewBlock(`${idx+1}. ${q.text}`,
+        `<div><strong>Your items:</strong> ${escapeHTML(provided.join(", ")||"(none)")}</div>
+         <div><strong>Required (any order):</strong> ${escapeHTML((q.answers||[]).join(", "))}</div>
+         <div class="src">Source: ${escapeHTML(q.source)}</div>`, ok));
+    }
+  });
+
+  return {score,total,review};
+}
+
+// ===== Progress HUD =====
+function isAnswered(q){
+  if(q.type==="truefalse" || q.type==="mcq"){
+    return !!document.querySelector(`input[name="${q.id}"]:checked`);
+  }
+  if(q.type==="identification" || q.type==="acronym"){
+    const input=document.querySelector(`input[data-qid="${q.id}"]`);
+    return !!(input && input.value.trim());
+  }
+  if(q.type==="matching"){
+    const pair=q.left[0];
+    const sel=document.querySelector(`select[data-qid="${q.id}"][data-left-key="${pair.key}"]`);
+    return !!(sel && sel.value);
+  }
+  if(q.type==="enumeration"){
+    const input=document.querySelector(`input[data-qid="${q.id}"]`);
+    return !!(input && input.value.trim());
+  }
+  return false;
+}
+
+function updateProgress(){
+  const total = QUIZ_STATE.length;
+  let answered = 0;
+  QUIZ_STATE.forEach(q => { if(isAnswered(q)) answered++; });
+  document.getElementById("answeredNum").textContent = answered;
+  document.getElementById("totalNum").textContent = total;
+}
+
+// ===== Export to Word (.doc via HTML) =====
+function buildWordHTML(score, total){
+  const now = new Date().toLocaleString();
+  const reviewHTML = document.getElementById("reviewContainer").innerHTML;
+  const css = `
+    body{font-family:Segoe UI,Arial; color:#111827;}
+    h1{font-size:20px;margin:0 0 6px}
+    .muted{color:#6b7280}
+    .card{border:1px solid #d1d5db; border-radius:8px; padding:10px; margin:10px 0}
+    .review.correct{background:#f0fdf4}
+    .review.incorrect{background:#fff1f2}
+    .q-title{font-weight:700;margin-bottom:4px}
+    .src{font-size:12px;color:#64748b;margin-top:6px}
+  `;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Quiz Review</title>
+  <style>${css}</style></head><body>
+  <h1>Project Management & SDLC Quiz Review</h1>
+  <div class="muted">Generated: ${escapeHTML(now)}</div>
+  <p><strong>Final Score:</strong> ${score} / ${total}</p>
+  ${reviewHTML}
+  </body></html>`;
+}
+
+function saveAsWord(score, total){
+  const html = buildWordHTML(score, total);
+  const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  a.href = url;
+  a.download = `PM_SDLC_Quiz_Review_${ts}.doc`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+
+// ===== Handlers =====
+function onSubmit(){
+  const {score,total,review} = collectAndScore();
+  document.getElementById("scoreBadge").textContent = `${score}/${total}`;
+  document.getElementById("scoreText").textContent = `${score} of ${total}`;
+  document.getElementById("hudScore").textContent = `${score}/${total}`;
+  document.getElementById("scoreBox").classList.remove("hidden");
+  const cont=document.getElementById("reviewContainer");
+  cont.innerHTML=""; review.forEach(b=>cont.appendChild(b)); cont.classList.remove("hidden");
+  document.getElementById("saveBtn").classList.remove("hidden");
+  setInputsDisabled(true);
+  document.getElementById("submitBtn").classList.add("hidden");
+  document.getElementById("retryBtn").classList.remove("hidden");
+}
+function onRetry(){
+  QUIZ_STATE = buildState();
+  renderQuiz();
+  setInputsDisabled(false);
+  document.getElementById("scoreBox").classList.add("hidden");
+  document.getElementById("reviewContainer").classList.add("hidden");
+  document.getElementById("reviewContainer").innerHTML="";
+  document.getElementById("submitBtn").classList.remove("hidden");
+  document.getElementById("retryBtn").classList.add("hidden");
+  document.getElementById("saveBtn").classList.add("hidden");
+  document.getElementById("hudScore").textContent = "—";
+  updateProgress();
+}
+function setInputsDisabled(disabled){document.querySelectorAll("input,select").forEach(el=>el.disabled=disabled);}
+
+document.addEventListener("DOMContentLoaded", ()=>{
+  renderQuiz();
+  document.getElementById("submitBtn").addEventListener("click", onSubmit);
+  document.getElementById("retryBtn").addEventListener("click", onRetry);
+  document.getElementById("saveBtn").addEventListener("click", ()=>{
+    const scoreText = document.getElementById("scoreBadge").textContent || "0/0";
+    const parts = scoreText.split("/");
+    const score = parseInt(parts[0]||"0", 10);
+    const total = parseInt(parts[1]||"0", 10);
+    saveAsWord(score, total);
+  });
+  document.addEventListener("change", updateProgress, true);
+  document.addEventListener("input", updateProgress, true);
+});
+</script>
+</body>
+</html>
